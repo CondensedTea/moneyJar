@@ -1,0 +1,15 @@
+services:
+  postgresql:
+    image: postgres
+    environment:
+      - "POSTGRES_USER=${DB_USER}"
+      - "POSTGRES_PASSWORD=${DB_PASS}"
+      - POSTGRES_DB=moneyjar
+    volumes:
+      - "postgresql:/var/lib/postgresql/data/"
+    ports:
+      - "5432:5432"
+
+volumes:
+  postgresql:
+    driver: local
