@@ -50,6 +50,13 @@ func (c Core) convertToUSD(cur currency, floatAmount float64) (int, error) {
 		return 0, fmt.Errorf("failed to parse currency")
 	}
 
+	var amountWasFlipped bool
+
+	if floatAmount < 0 {
+		floatAmount *= -1
+		amountWasFlipped = true
+	}
+
 	url := fmt.Sprintf(apiEndpoint, c.apiKey, cur, "usd", floatAmount)
 
 	resp, err := c.httpClient.Get(url)
@@ -65,5 +72,12 @@ func (c Core) convertToUSD(cur currency, floatAmount float64) (int, error) {
 	if err = json.NewDecoder(resp.Body).Decode(&exchangeRateResp); err != nil {
 		return 0, err
 	}
-	return int(math.Round(exchangeRateResp.ConversionResult * 100)), nil
+
+	var convertedFloatAmount float64
+	if amountWasFlipped {
+		convertedFloatAmount = exchangeRateResp.ConversionResult * -1
+	} else {
+		convertedFloatAmount = exchangeRateResp.ConversionResult
+	}
+	return int(math.Round(convertedFloatAmount * 100)), nil
 }
