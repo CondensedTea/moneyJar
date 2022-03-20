@@ -1,4 +1,9 @@
 services:
+  bot:
+    build: .
+    depends_on:
+      - postgresql
+
   postgresql:
     image: postgres
     environment:

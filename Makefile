@@ -1,6 +1,6 @@
 LOCAL_BIN:=$(CURDIR)/bin
 
-DSN :=
+VERSION:=0.1
 
 .PHONY: build
 build:
@@ -8,16 +8,20 @@ build:
 
 .PHONY: run
 run:
-	CGO_ENABLED=0 go run ./cmd/moneyJar/main.go
+	CGO_ENABLED=0 go run ./cmd/moneyJar/main.go --loglevel=debug
 
-.PHONY: local.up
+.PHONY: lint
+lint:
+	 golangci-lint run --config=.golangci.yaml ./...
+
+.PHONY: docker.up
 local.up:
 	docker-compose up -d
 
-.PHONY: local.down
+.PHONY: docker.down
 local.down:
 	docker-compose down
 
-.PHONY: local.migrate
-local.migrate:
-	goose up
+.PHONY: docker.build
+local.build:
+	docker-compose build

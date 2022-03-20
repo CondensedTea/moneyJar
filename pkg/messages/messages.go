@@ -6,12 +6,16 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const messagesFile = "messages.yaml"
+
+// MessageCollection is a model for messages file
 type MessageCollection struct {
 	Messages map[string]string `yaml:"messages"`
 }
 
-func Load(path string) (map[string]string, error) {
-	fileBytes, err := ioutil.ReadFile(path)
+// Load parses messages file
+func Load() (map[string]string, error) {
+	fileBytes, err := ioutil.ReadFile(messagesFile)
 	if err != nil {
 		return nil, err
 	}

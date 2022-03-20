@@ -1,7 +1,6 @@
 package database
 
-import "time"
-
+// Account represents record in accounts table
 type Account struct {
 	ID           int
 	FromUser     int    `db:"from_user"`
@@ -11,13 +10,15 @@ type Account struct {
 	Balance      int
 }
 
+// User represents record in users table
 type User struct {
 	ID   int
 	Name string
 }
 
+// Log represents record in transactionLog table
 type Log struct {
 	Account       int
 	BalanceChange int
-	ts            time.Time
+	// ts            time.Time
 }

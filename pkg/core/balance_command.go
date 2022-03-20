@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"moneyjar/pkg/database"
 
+	log "github.com/sirupsen/logrus"
 	tg "gopkg.in/telebot.v3"
 )
 
@@ -12,11 +13,11 @@ func (c Core) balanceCommand(tgCtx tg.Context) error {
 	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
 	defer cancel()
 
-	userId := int(tgCtx.Sender().ID)
+	userID := int(tgCtx.Sender().ID)
 
-	accounts, err := c.db.GetAccounts(ctx, userId)
+	accounts, err := c.db.GetAccounts(ctx, userID)
 	if err != nil {
-		c.log.Errorf("failed to get accounts: %v", err)
+		log.Errorf("failed to get accounts: %v", err)
 		msg := c.messages["failedToGetAccounts"]
 		return tgCtx.Send(msg, &tg.SendOptions{ReplyTo: tgCtx.Message()})
 	}

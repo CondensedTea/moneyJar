@@ -7,6 +7,7 @@ import (
 	"net/http"
 )
 
+// ExchangeRateResponse represents models of API response
 type ExchangeRateResponse struct {
 	Result             string  `json:"result"`
 	Documentation      string  `json:"documentation"`
@@ -18,26 +19,27 @@ type ExchangeRateResponse struct {
 	BaseCode           string  `json:"base_code"`
 	TargetCode         string  `json:"target_code"`
 	ConversionRate     float64 `json:"conversion_rate"`
+	ConversionResult   float64 `json:"conversion_result"`
 }
 
 type currency string
 
 const (
-	USD currency = "usd"
-	RUB currency = "rub"
-	GEL currency = "gel"
+	usd currency = "usd"
+	rub currency = "rub"
+	gel currency = "gel"
 )
 
-const APIEndpoint = "https://v6.exchangerate-api.com/v6/%s/pair/%s/%s"
+const apiEndpoint = "https://v6.exchangerate-api.com/v6/%s/pair/%s/%s/%f"
 
 func parseCurrency(s string) currency {
 	switch s {
 	case "$", "USD", "usd", "долларов", "доллара":
-		return USD
+		return usd
 	case "₽", "RUB", "rub", "рублей", "рубля":
-		return RUB
+		return rub
 	case "₾", "GEL", "gel", "лари", "лар":
-		return GEL
+		return gel
 	default:
 		return ""
 	}
@@ -48,7 +50,7 @@ func (c Core) convertToUSD(cur currency, floatAmount float64) (int, error) {
 		return 0, fmt.Errorf("failed to parse currency")
 	}
 
-	url := fmt.Sprintf(APIEndpoint, c.apiKey, cur, "usd")
+	url := fmt.Sprintf(apiEndpoint, c.apiKey, cur, "usd", floatAmount)
 
 	resp, err := c.httpClient.Get(url)
 	if err != nil {
@@ -59,9 +61,9 @@ func (c Core) convertToUSD(cur currency, floatAmount float64) (int, error) {
 	}
 	defer resp.Body.Close()
 
-	var rate ExchangeRateResponse
-	if err = json.NewDecoder(resp.Body).Decode(&rate); err != nil {
+	var exchangeRateResp ExchangeRateResponse
+	if err = json.NewDecoder(resp.Body).Decode(&exchangeRateResp); err != nil {
 		return 0, err
 	}
-	return int(math.Round(floatAmount * 100 * rate.ConversionRate)), nil
+	return int(math.Round(exchangeRateResp.ConversionResult)), nil
 }

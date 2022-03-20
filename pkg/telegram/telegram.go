@@ -3,13 +3,14 @@ package telegram
 import (
 	"time"
 
-	tg "gopkg.in/telebot.v3"
+	"gopkg.in/telebot.v3"
 )
 
-func New(token string) (*tg.Bot, error) {
-	opts := tg.Settings{
+// New returns configured telebot.Bot
+func New(token string) (*telebot.Bot, error) {
+	opts := telebot.Settings{
 		Token:  token,
-		Poller: &tg.LongPoller{Timeout: 10 * time.Second},
+		Poller: &telebot.LongPoller{Timeout: 10 * time.Second},
 	}
-	return tg.NewBot(opts)
+	return telebot.NewBot(opts)
 }
