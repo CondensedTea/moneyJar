@@ -68,7 +68,7 @@ func (c Core) debtCommand(tgCtx tg.Context) error {
 		return tgCtx.Send(msg, &tg.SendOptions{ReplyTo: tgCtx.Message()})
 	}
 
-	if len(accounts) < 1 {
+	if len(updateAccounts) < 1 {
 		// If no accounts were updated we should return warning
 		msg := c.messages["zeroBalancesWereUpdated"]
 		return tgCtx.Send(msg, &tg.SendOptions{ReplyTo: tgCtx.Message()})
