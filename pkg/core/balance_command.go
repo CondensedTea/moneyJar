@@ -34,7 +34,7 @@ func generateBalanceMessage(balances []database.Account) (msg string) {
 		balance := float64(account.Balance) / 100
 
 		var row string
-		if balance > 0 {
+		if balance >= 0 {
 			row = fmt.Sprintf(rowTemplate, i+1, account.ToUserName, account.FromUserName, balance)
 		} else {
 			row = fmt.Sprintf(rowTemplate, i+1, account.FromUserName, account.ToUserName, balance*-1)

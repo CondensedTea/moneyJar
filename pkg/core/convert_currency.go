@@ -65,5 +65,5 @@ func (c Core) convertToUSD(cur currency, floatAmount float64) (int, error) {
 	if err = json.NewDecoder(resp.Body).Decode(&exchangeRateResp); err != nil {
 		return 0, err
 	}
-	return int(math.Round(exchangeRateResp.ConversionResult)), nil
+	return int(math.Round(exchangeRateResp.ConversionResult) * 100), nil
 }
