@@ -15,13 +15,13 @@ lint:
 	 golangci-lint run --config=.golangci.yaml ./...
 
 .PHONY: docker.up
-local.up:
+docker.up:
 	docker-compose up -d
 
 .PHONY: docker.down
-local.down:
+docker.down:
 	docker-compose down
 
 .PHONY: docker.build
-local.build:
+docker.build:
 	docker-compose build
