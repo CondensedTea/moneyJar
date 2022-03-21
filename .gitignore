@@ -1,4 +1,5 @@
 .idea/
 config.yaml
+*config.yaml
 .env
 bin/

@@ -6,24 +6,28 @@ import (
 	"moneyjar/pkg/database"
 	"regexp"
 	"strconv"
-	"time"
 
 	log "github.com/sirupsen/logrus"
 	tg "gopkg.in/telebot.v3"
 )
 
 var (
-	reDebtPayload   = regexp.MustCompile(`([-\d.,]+) ([\wа-яА-Я]+) (@[@\w, ]+)$`)
+	reDebtPayload   = regexp.MustCompile(`([-\d.,]+) ?([\wа-яА-Я$₽₾]+) (@[@\w, ]+); ?([\wа-яА-Я ]+)$`)
 	reMentionsArray = regexp.MustCompile(`@(\w+)`)
 )
 
 func (c Core) debtCommand(tgCtx tg.Context) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
+	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
 	defer cancel()
 
 	fromUser := int(tgCtx.Sender().ID)
 
-	floatAmount, cur, toUsers, err := c.parsePayload(tgCtx)
+	if len(tgCtx.Message().Payload) == 0 {
+		// Logger ignore messages without payload
+		return nil
+	}
+
+	floatAmount, cur, toUsers, err := c.parsePayload(ctx, tgCtx)
 	if err != nil {
 		log.Errorf("failed to parse payload: %v", err)
 		msg := c.messages["failedToParsePayload"]
@@ -44,22 +48,15 @@ func (c Core) debtCommand(tgCtx tg.Context) error {
 
 	var accounts []database.Account
 
-	if len(toUsers) == 1 && toUsers[0] == 0 {
-		accounts, err = c.db.GetAccounts(ctx, fromUser)
+	if toUsers == nil {
+		toUsers, err = c.db.GetAccountsWithUser(ctx, fromUser)
 		if err != nil {
 			log.Errorf("failed to get all accounts: %v", err)
 			msg := c.messages["failedToGetAccounts"]
 			return tgCtx.Send(msg, &tg.SendOptions{ReplyTo: tgCtx.Message()})
 		}
 
-		var allUsers []int
-
 		log.Debugf("processing @all; got accounts: %#v, toUser: %v", accounts, toUsers)
-
-		for _, account := range accounts {
-			allUsers = append(allUsers, account.ID)
-		}
-		toUsers = allUsers
 	}
 	updateAccounts, err := c.db.UpdateAccounts(ctx, toUsers, usdAmount)
 	if err != nil {
@@ -79,44 +76,41 @@ func (c Core) debtCommand(tgCtx tg.Context) error {
 	return tgCtx.Send(msg, &tg.SendOptions{ReplyTo: tgCtx.Message(), ParseMode: tg.ModeHTML})
 }
 
-func (c Core) parsePayload(tgCtx tg.Context) (amount float64, cur currency, userIDs []int, err error) {
+func (c Core) parsePayload(ctx context.Context, tgCtx tg.Context) (amount float64, cur currency, accounts []database.Account, err error) {
 	match := reDebtPayload.FindStringSubmatch(tgCtx.Message().Payload)
 	if len(match) < 3 {
-		return amount, cur, userIDs, fmt.Errorf("invalid payload: %d of 3 matches", len(match))
+		return amount, cur, accounts, fmt.Errorf("invalid payload: %d of 3 matches", len(match))
 	}
 	amount, err = strconv.ParseFloat(match[1], 64)
 	if err != nil {
-		return amount, cur, userIDs, fmt.Errorf("failed to parse amount: %v", err)
+		return amount, cur, accounts, fmt.Errorf("failed to parse amount: %v", err)
 	}
 
 	cur = parseCurrency(match[2])
 	if cur == "" {
-		return amount, cur, userIDs, fmt.Errorf("unknown currency: %s", match[1])
+		return amount, cur, accounts, fmt.Errorf("unknown currency: %s", match[1])
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
 	if match[3] == "@all" {
-		userIDs = []int{0}
+		accounts = nil
 	} else {
 		toUsernames, err := parseMentions(match[3])
 		if err != nil {
-			return amount, cur, userIDs, fmt.Errorf("failed to parse mentions string: %v", err)
+			return amount, cur, accounts, fmt.Errorf("failed to parse mentions string: %v", err)
 		}
 
 		fromUser := int(tgCtx.Sender().ID)
 
 		for _, toUsername := range toUsernames {
-			user, err := c.db.UserNamesToAccount(ctx, fromUser, toUsername)
+			account, err := c.db.UserNameToAccount(ctx, fromUser, toUsername)
 			if err != nil {
-				log.Warnf("failed to get userId from name %s: %v", match[3], err)
+				log.Errorf("failed to get userId from name %s: %v", match[3], err)
 				continue
 			}
-			userIDs = append(userIDs, user)
+			accounts = append(accounts, account)
 		}
 	}
-	return amount, cur, userIDs, nil
+	return amount, cur, accounts, nil
 }
 
 func parseMentions(mentions string) (usernames []string, err error) {

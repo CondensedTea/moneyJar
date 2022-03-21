@@ -15,7 +15,7 @@ func (c Core) balanceCommand(tgCtx tg.Context) error {
 
 	userID := int(tgCtx.Sender().ID)
 
-	accounts, err := c.db.GetAccounts(ctx, userID)
+	accounts, err := c.db.GetAccountsWithUser(ctx, userID)
 	if err != nil {
 		log.Errorf("failed to get accounts: %v", err)
 		msg := c.messages["failedToGetAccounts"]

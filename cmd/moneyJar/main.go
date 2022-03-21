@@ -37,11 +37,11 @@ func main() {
 
 	db, err = database.New(config.C.String("db.dsn"))
 	if err != nil {
-		log.Fatalf("failed to connect to dabase: %v", err)
+		log.Fatalf("failed to connect to database: %v", err)
 	}
 	tg, err = telegram.New(config.C.String("telegram.token"))
 	if err != nil {
-		log.Fatalf("failed to connect to dabase: %v", err)
+		log.Fatalf("failed to connect to telegram: %v", err)
 	}
 	msgs, err = messages.Load()
 	if err != nil {

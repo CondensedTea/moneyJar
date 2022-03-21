@@ -50,8 +50,10 @@ func (db Database) CreateUser(ctx context.Context, id int, name string) error {
 
 	const createAccountsQuery = `
 		insert into
-		    accounts (from_user, to_user) 
-		    select id from_user, $1 to_user from users where id != $1`
+		    accounts (from_user, to_user, is_flipped) 
+		    select $1 to_user, id from_user, false from users where id != $1
+		    union
+		    select id to_user, $1 from_user, true from users where id != $1`
 	_, err = tx.ExecContext(ctx, createAccountsQuery, id)
 	if err != nil {
 		if rollbackErr := tx.Rollback(); rollbackErr != nil {
@@ -63,7 +65,7 @@ func (db Database) CreateUser(ctx context.Context, id int, name string) error {
 }
 
 // UpdateAccounts updates accounts from one user to multiple users
-func (db Database) UpdateAccounts(ctx context.Context, toAccounts []int, amount int) ([]Account, error) {
+func (db Database) UpdateAccounts(ctx context.Context, toAccounts []Account, amount int) ([]Account, error) {
 	tx, err := db.conn.BeginTxx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start transaction: %v", err)
@@ -79,33 +81,52 @@ func (db Database) UpdateAccounts(ctx context.Context, toAccounts []int, amount 
 	dividedAmount := int(math.Round(float64(amount) / float64(len(toAccounts))))
 
 	const balanceQuery = `
-		update 
+		update
 			accounts
-		set 
-			balance = balance + $1 
-		where 
-		      id = $2
-		returning id, from_user, to_user, balance`
+		set
+		    balance = case when from_user = $2 then balance + $1 else balance end
+		where
+		    (from_user = $3 and to_user = $2) or (from_user = $2 and to_user = $3)
+		returning from_user, to_user, balance, is_flipped`
+	// const balanceQuery = `
+	// 	update
+	// 		accounts
+	// 	balance = set case when from_user = $3 then  balance + $1 end
+	// 	from (
+	// 	    select
+	// 	        balance
+	// 	    from
+	// 	        accounts a1
+	// 	    where (from_user = $3 and to_user = $2) or (from_user = $2 and to_user = $3)
+	// 	    ) t
+	// 	where
+	// 	    from_user = $3 and to_user = $2
+	// 	returning from_user, to_user, balance`
 
-	const logQuery = `insert into transactionlog (account, balance_change) values ($1, $2)`
+	const logQuery = `insert into transactionlog (from_user, to_user, balance_change) values ($1, $2, $3)`
 
 	for _, toAccount := range toAccounts {
-		var account Account
+		var updatedAccounts []Account
 
-		if err = tx.GetContext(ctx, &account, balanceQuery, dividedAmount, toAccount); err != nil {
+		if err = tx.SelectContext(ctx, &updatedAccounts, balanceQuery, dividedAmount, toAccount.FromUser, toAccount.ToUser); err != nil {
 			if rollbackErr := tx.Rollback(); rollbackErr != nil {
 				return nil, fmt.Errorf("failed to rollback: %v", err)
 			}
 			return nil, fmt.Errorf("failed to update balance: %v", err)
 		}
 
-		if _, err = tx.ExecContext(ctx, logQuery, account.ID, amount); err != nil {
+		if _, err = tx.ExecContext(ctx, logQuery, toAccount.FromUser, toAccount.ToUser, amount); err != nil {
 			if rollbackErr := tx.Rollback(); rollbackErr != nil {
 				return nil, fmt.Errorf("failed to rollback: %v", err)
 			}
 			return nil, fmt.Errorf("failed to insert log record: %v", err)
 		}
 
+		updatedAccounts = mergeDuplicateAccounts(updatedAccounts)
+		if len(updatedAccounts) != 1 {
+			return nil, fmt.Errorf("updated accounts after merging still not 1: %d", len(updatedAccounts))
+		}
+		account := updatedAccounts[0]
 		(&account).FromUserName, err = db.userIDtoName(ctx, account.FromUser)
 		if err != nil {
 			if rollbackErr := tx.Rollback(); rollbackErr != nil {
@@ -125,23 +146,26 @@ func (db Database) UpdateAccounts(ctx context.Context, toAccounts []int, amount 
 	return accounts, nil
 }
 
-// UserNamesToAccount converts username to user ID
-func (db Database) UserNamesToAccount(ctx context.Context, fromUserID int, toUsername string) (int, error) {
+// UserNameToAccount gets user ID from username
+func (db Database) UserNameToAccount(ctx context.Context, fromUserID int, toUsername string) (Account, error) {
 	const query = `
 		select 
-		       id 
+		       is_flipped, to_user
 		from 
 		     accounts
 		where 
-		      (from_user = $1 and to_user = (select id from users where name = $2))
-		   or 
-		      (to_user = $1 and from_user = (select id from users where name = $2))`
+		      from_user = $1
+		  and 
+		      to_user = (select id from users where name = $2)`
 
-	var id int
-	if err := db.conn.QueryRowxContext(ctx, query, fromUserID, toUsername).Scan(&id); err != nil {
-		return 0, fmt.Errorf("failed to get user by name: %v", err)
+	var (
+		isFlipped bool
+		userID    int
+	)
+	if err := db.conn.QueryRowxContext(ctx, query, fromUserID, toUsername).Scan(&isFlipped, &userID); err != nil {
+		return Account{}, fmt.Errorf("failed to get user by name: %v", err)
 	}
-	return id, nil
+	return Account{FromUser: fromUserID, ToUser: userID, IsFlipped: isFlipped}, nil
 }
 
 func (db Database) userIDtoName(ctx context.Context, userID int) (string, error) {
@@ -154,8 +178,8 @@ func (db Database) userIDtoName(ctx context.Context, userID int) (string, error)
 	return name, nil
 }
 
-// GetAccounts returns accounts connected to user
-func (db Database) GetAccounts(ctx context.Context, userID int) ([]Account, error) {
+// GetAccountsWithUser returns accounts connected to user
+func (db Database) GetAccountsWithUser(ctx context.Context, userID int) ([]Account, error) {
 	const query = `
 		select
 		       a.id,
@@ -163,7 +187,8 @@ func (db Database) GetAccounts(ctx context.Context, userID int) ([]Account, erro
 		       u1.name from_user_name,
 		       to_user,
 		       u2.name to_user_name,
-		       balance
+		       balance,
+		       is_flipped
 		from
 		     accounts a
 		         join users u1 on u1.id = a.from_user
@@ -177,5 +202,32 @@ func (db Database) GetAccounts(ctx context.Context, userID int) ([]Account, erro
 	if err := db.conn.SelectContext(ctx, &accounts, query, userID); err != nil {
 		return nil, fmt.Errorf("failed to get list of accounts for user %d: %v", userID, err)
 	}
+
+	accounts = mergeDuplicateAccounts(accounts)
+
 	return accounts, nil
+}
+
+// mergeDuplicateAccounts is needed because we store two records for single user-to-user relation.
+// It puts accounts in hash map with key as sorted user IDs and sums balances in same pairs.
+func mergeDuplicateAccounts(accounts []Account) (resultAccounts []Account) {
+	hashMap := make(map[string]*Account)
+
+	for i, account := range accounts {
+		if account.IsFlipped == false {
+			key := account.String()
+			hashMap[key] = &accounts[i]
+		}
+	}
+
+	for _, account := range accounts {
+		if account.IsFlipped == true {
+			key := account.String()
+			hashMap[key].Balance += account.Balance * -1
+		}
+	}
+	for _, account := range hashMap {
+		resultAccounts = append(resultAccounts, *account)
+	}
+	return resultAccounts
 }

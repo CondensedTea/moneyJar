@@ -8,11 +8,12 @@ create table accounts (
     id serial primary key,
     from_user int references users(id),
     to_user int references users(id),
-    balance bigint default 0,
-    unique (from_user, to_user)
+    balance int default 0,
+    is_flipped bool default false
 );
 create table transactionLog (
-    account integer references accounts(id),
+    from_user int references users(id),
+    to_user int references users(id),
     balance_change bigint not null,
     ts timestamp default now()
 );

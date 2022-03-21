@@ -51,33 +51,34 @@ func (c Core) convertToUSD(cur currency, floatAmount float64) (int, error) {
 	}
 
 	var amountWasFlipped bool
-
 	if floatAmount < 0 {
 		floatAmount *= -1
 		amountWasFlipped = true
 	}
+	if cur != usd {
+		url := fmt.Sprintf(apiEndpoint, c.apiKey, cur, "usd", floatAmount)
+		resp, err := c.httpClient.Get(url)
+		if err != nil {
+			return 0, err
+		}
+		if resp.StatusCode != http.StatusOK {
+			return 0, fmt.Errorf("api returned bad status: %v", resp.StatusCode)
+		}
+		defer resp.Body.Close()
 
-	url := fmt.Sprintf(apiEndpoint, c.apiKey, cur, "usd", floatAmount)
-
-	resp, err := c.httpClient.Get(url)
-	if err != nil {
-		return 0, err
-	}
-	if resp.StatusCode != http.StatusOK {
-		return 0, fmt.Errorf("api returned bad status: %v", resp.StatusCode)
-	}
-	defer resp.Body.Close()
-
-	var exchangeRateResp ExchangeRateResponse
-	if err = json.NewDecoder(resp.Body).Decode(&exchangeRateResp); err != nil {
-		return 0, err
+		var exchangeRateResp ExchangeRateResponse
+		if err = json.NewDecoder(resp.Body).Decode(&exchangeRateResp); err != nil {
+			return 0, err
+		}
+		floatAmount = exchangeRateResp.ConversionResult
 	}
 
 	var convertedFloatAmount float64
 	if amountWasFlipped {
-		convertedFloatAmount = exchangeRateResp.ConversionResult * -1
+		convertedFloatAmount = floatAmount * -1
 	} else {
-		convertedFloatAmount = exchangeRateResp.ConversionResult
+		convertedFloatAmount = floatAmount
 	}
+
 	return int(math.Round(convertedFloatAmount * 100)), nil
 }
