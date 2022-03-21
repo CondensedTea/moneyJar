@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	reDebtPayload   = regexp.MustCompile(`([-\d.,]+) ?([\wа-яА-Я$₽₾]+) (@[@\w, ]+); ?([\wа-яА-Я ]+)$`)
+	reDebtPayload   = regexp.MustCompile(`([-\d.,]+) ?([\wа-яА-Я$₽₾]+) (@[@\w, ]+)`)
 	reMentionsArray = regexp.MustCompile(`@(\w+)`)
 )
 
