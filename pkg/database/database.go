@@ -88,20 +88,6 @@ func (db Database) UpdateAccounts(ctx context.Context, toAccounts []Account, amo
 		where
 		    (from_user = $3 and to_user = $2) or (from_user = $2 and to_user = $3)
 		returning from_user, to_user, balance, is_flipped`
-	// const balanceQuery = `
-	// 	update
-	// 		accounts
-	// 	balance = set case when from_user = $3 then  balance + $1 end
-	// 	from (
-	// 	    select
-	// 	        balance
-	// 	    from
-	// 	        accounts a1
-	// 	    where (from_user = $3 and to_user = $2) or (from_user = $2 and to_user = $3)
-	// 	    ) t
-	// 	where
-	// 	    from_user = $3 and to_user = $2
-	// 	returning from_user, to_user, balance`
 
 	const logQuery = `insert into transactionlog (from_user, to_user, balance_change) values ($1, $2, $3)`
 

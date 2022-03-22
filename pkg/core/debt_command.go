@@ -2,6 +2,8 @@ package core
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"moneyjar/pkg/database"
 	"regexp"
@@ -31,6 +33,9 @@ func (c Core) debtCommand(tgCtx tg.Context) error {
 	if err != nil {
 		log.Errorf("failed to parse payload: %v", err)
 		msg := c.messages["failedToParsePayload"]
+		if errors.Is(sql.ErrNoRows, err) {
+			msg = c.messages["unknownUsersInPayload"]
+		}
 		return tgCtx.Send(msg, &tg.SendOptions{ReplyTo: tgCtx.Message()})
 	}
 
@@ -104,8 +109,7 @@ func (c Core) parsePayload(ctx context.Context, tgCtx tg.Context) (amount float6
 		for _, toUsername := range toUsernames {
 			account, err := c.db.UserNameToAccount(ctx, fromUser, toUsername)
 			if err != nil {
-				log.Errorf("failed to get userId from name %s: %v", match[3], err)
-				continue
+				return amount, cur, accounts, fmt.Errorf("failed to get userId from name %s: %v", match[3], err)
 			}
 			accounts = append(accounts, account)
 		}
