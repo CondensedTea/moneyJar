@@ -50,6 +50,7 @@ func New(db database.Provider, tg *telebot.Bot, msgs map[string]string) (*Core, 
 	c.addCommand("/register", "Зарегистрироваться в боте", c.registerCommand)
 	c.addCommand("/debt", "Добавить долг для @пользователя", c.debtCommand)
 	c.addCommand("/balance", "Текущие счета", c.balanceCommand)
+	c.addCommand("/history", "История операция, можно указать страницу", c.historyCommand)
 
 	if err := c.tg.SetCommands(c.commands); err != nil {
 		return nil, fmt.Errorf("failed to set telegram commands: %v", err)

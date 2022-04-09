@@ -3,6 +3,7 @@ package database
 import (
 	"fmt"
 	"sort"
+	"time"
 )
 
 // Account represents record in accounts table
@@ -30,7 +31,9 @@ type User struct {
 
 // Log represents record in transactionLog table
 type Log struct {
-	Account       int
-	BalanceChange int
-	// ts            time.Time
+	FromUserName  string    `db:"from_user_name"`
+	ToUserName    string    `db:"to_user_name"`
+	BalanceChange int       `db:"balance_change"`
+	Comment       string    `db:"comment"`
+	TS            time.Time `db:"ts"`
 }

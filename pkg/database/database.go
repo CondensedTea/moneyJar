@@ -65,7 +65,7 @@ func (db Database) CreateUser(ctx context.Context, id int, name string) error {
 }
 
 // UpdateAccounts updates accounts from one user to multiple users
-func (db Database) UpdateAccounts(ctx context.Context, toAccounts []Account, amount int) ([]Account, error) {
+func (db Database) UpdateAccounts(ctx context.Context, toAccounts []Account, amount int, comment string) ([]Account, error) {
 	tx, err := db.conn.BeginTxx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start transaction: %v", err)
@@ -78,7 +78,10 @@ func (db Database) UpdateAccounts(ctx context.Context, toAccounts []Account, amo
 	}()
 	var accounts []Account
 
-	dividedAmount := int(math.Round(float64(amount) / float64(len(toAccounts))))
+	if len(toAccounts) > 1 {
+		partsPlusAuthor := len(toAccounts) + 1
+		amount = int(math.Round(float64(amount) / float64(partsPlusAuthor)))
+	}
 
 	const balanceQuery = `
 		update
@@ -89,19 +92,20 @@ func (db Database) UpdateAccounts(ctx context.Context, toAccounts []Account, amo
 		    (from_user = $3 and to_user = $2) or (from_user = $2 and to_user = $3)
 		returning from_user, to_user, balance, is_flipped`
 
-	const logQuery = `insert into transactionlog (from_user, to_user, balance_change) values ($1, $2, $3)`
+	const logQuery = `insert into transactionlog (from_user, to_user, balance_change, comment) values ($1, $2, $3, $4)`
 
 	for _, toAccount := range toAccounts {
 		var updatedAccounts []Account
 
-		if err = tx.SelectContext(ctx, &updatedAccounts, balanceQuery, dividedAmount, toAccount.FromUser, toAccount.ToUser); err != nil {
+		err = tx.SelectContext(ctx, &updatedAccounts, balanceQuery, amount, toAccount.FromUser, toAccount.ToUser)
+		if err != nil {
 			if rollbackErr := tx.Rollback(); rollbackErr != nil {
 				return nil, fmt.Errorf("failed to rollback: %v", err)
 			}
 			return nil, fmt.Errorf("failed to update balance: %v", err)
 		}
 
-		if _, err = tx.ExecContext(ctx, logQuery, toAccount.FromUser, toAccount.ToUser, amount); err != nil {
+		if _, err = tx.ExecContext(ctx, logQuery, toAccount.FromUser, toAccount.ToUser, amount, comment); err != nil {
 			if rollbackErr := tx.Rollback(); rollbackErr != nil {
 				return nil, fmt.Errorf("failed to rollback: %v", err)
 			}
@@ -109,7 +113,7 @@ func (db Database) UpdateAccounts(ctx context.Context, toAccounts []Account, amo
 		}
 
 		updatedAccounts = mergeDuplicateAccounts(updatedAccounts)
-		if len(updatedAccounts) != 1 {
+		if len(updatedAccounts) > 1 {
 			return nil, fmt.Errorf("updated accounts after merging still not 1: %d", len(updatedAccounts))
 		}
 		account := updatedAccounts[0]
@@ -192,6 +196,37 @@ func (db Database) GetAccountsWithUser(ctx context.Context, userID int) ([]Accou
 	accounts = mergeDuplicateAccounts(accounts)
 
 	return accounts, nil
+}
+
+// GetTransactionsForUser returns log records with given users
+func (db Database) GetTransactionsForUser(ctx context.Context, userID, page int) ([]Log, error) {
+	var logs []Log
+
+	if page < 1 {
+		return nil, fmt.Errorf("page number can not be less 1")
+	}
+
+	const offsetStep = 10
+	const query = `
+		select 
+		       (select name from users where id = from_user) as from_user_name,
+		       (select name from users where id = to_user) as to_user_name,
+		       balance_change,
+		       comment,
+		       ts
+		from
+		     transactionlog
+		where
+		      from_user = $1 or to_user = $1
+		order by ts desc
+		limit 10
+		offset $2
+		`
+
+	if err := db.conn.SelectContext(ctx, &logs, query, userID, (page-1)*offsetStep); err != nil {
+		return nil, err
+	}
+	return logs, nil
 }
 
 // mergeDuplicateAccounts is needed because we store two records for single user-to-user relation.
