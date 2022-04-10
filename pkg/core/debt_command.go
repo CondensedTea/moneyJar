@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	reDebtPayload   = regexp.MustCompile(`([-\d.,]+) ?([\wа-яА-Я$₽₾]+) ([@\w, ]+);? ?([\w ]+)?`)
+	reDebtPayload   = regexp.MustCompile(`([-\d.,]+) ?([\wа-яА-Я$₽₾]+) ([@\w, ]+);? ?([\wа-яА-Я ]+)?`)
 	reMentionsArray = regexp.MustCompile(`@(\w+)`)
 
 	errFailedToGetAllAccounts = errors.New(`failed to get all accounts`)

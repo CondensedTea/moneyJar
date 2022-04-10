@@ -39,11 +39,11 @@ func (c Core) historyCommand(tgCtx tg.Context) error {
 
 	for i, l := range logs {
 		msgLine := fmt.Sprintf(
-			"%d) @%s -> @%s: %d$; %s\n",
+			"%d) @%s -> @%s: %.2f$; %s\n",
 			i+1,
 			l.FromUserName,
 			l.ToUserName,
-			l.BalanceChange/100,
+			float64(l.BalanceChange)/100.0,
 			l.Comment)
 		msg += msgLine
 	}

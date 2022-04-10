@@ -60,8 +60,8 @@ func Test_reDebtPayload(t *testing.T) {
 	assert.Equal(t, expectedMultipleMention, match)
 
 	var (
-		comment         = `100 gel @test; comment text`
-		expectedComment = []string{comment, "100", "gel", "@test", "comment text"}
+		comment         = `100 gel @test; comment коммент`
+		expectedComment = []string{comment, "100", "gel", "@test", "comment коммент"}
 	)
 	match = reDebtPayload.FindStringSubmatch(comment)
 	assert.Equal(t, expectedComment, match)
